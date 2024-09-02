@@ -3,24 +3,26 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/reuben-james/restapidemo/pkg/mocks"
 )
 
-func DeleteArticle(w http.ResponseWriter, r *http.Request) {
+const QueryDelArticle = "DELETE FROM articles WHERE id = $1;"
+
+func (h handler) DeleteArticle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	for index, article := range mocks.Articles {
-		if article.Id == id {
-			mocks.Articles = append(mocks.Articles[:index], mocks.Articles[index+1:]...)
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(fmt.Sprintf("Deleted article %s", id))
-			break
-		}
+	_, err := h.DB.Query(QueryDelArticle, &id)
+	if err != nil {
+		log.Printf("Failed to delete article (ID: %s): %v", id, err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
 	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(fmt.Sprintf("Deleted article (ID: %s)", id))
 }
