@@ -8,11 +8,13 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/reuben-james/restapidemo/pkg/mocks"
+	"github.com/lib/pq"
 	"github.com/reuben-james/restapidemo/pkg/models"
 )
 
-func UpdateArticle(w http.ResponseWriter, r *http.Request) {
+const QueryUpdateArticle = "UPDATE articles SET title = $2, description = $3, content = $4, tags = $5 WHERE id = $1 RETURNING id;"
+
+func (h handler) UpdateArticle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -26,19 +28,21 @@ func UpdateArticle(w http.ResponseWriter, r *http.Request) {
 	var updatedArticle models.Article
 	json.Unmarshal(body, &updatedArticle)
 
-	for index, article := range mocks.Articles {
-		if article.Id == id {
-			article.Title = updatedArticle.Title
-			article.Desc = updatedArticle.Desc
-			article.Content = updatedArticle.Content
-			article.Tags = updatedArticle.Tags
+	err = h.DB.QueryRow(
+		QueryUpdateArticle, 
+		&id, 
+		&updatedArticle.Title, 
+		&updatedArticle.Desc, 
+		&updatedArticle.Content,
+		pq.Array(&updatedArticle.Tags),
+	).Scan(&id)
+	if err != nil {
+        log.Printf("Failed to execute update on article (ID: %s): %v", id, err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-			mocks.Articles[index] = article
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(fmt.Sprintf("Updated %s", article.Title))
-			break
-		}
-	}
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(fmt.Sprintf("Updated article (ID: %s)", id))
 }
